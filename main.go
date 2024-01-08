@@ -612,7 +612,18 @@ func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (st
 	if len(parts) < 5 {
 		return "", fmt.Errorf("not enough slash separated parts in location %v: %d", location, len(parts))
 	}
-	newDir := filepath.Join(s.dlDir, parts[4])
+	finalDir := parts[4]
+	if *veryVerboseFlag {
+		log.Printf("finalDir %v", finalDir)
+	}
+	parentDir := finalDir[0:8]
+	if *veryVerboseFlag {
+		log.Printf("parentDir %v", parentDir)
+	}
+	newDir := filepath.Join(s.dlDir, parentDir, finalDir)
+	if *veryVerboseFlag {
+		log.Printf("newDir %v", newDir)
+	}
 	if err := os.MkdirAll(newDir, 0700); err != nil {
 		return "", err
 	}
@@ -631,7 +642,9 @@ func (s *Session) checkPreviouslyDownloaded(ctx context.Context, location string
 	if len(parts) < 5 {
 		return false, fmt.Errorf("not enough slash separated parts in location %v: %d", location, len(parts))
 	}
-	checkDir := filepath.Join(s.dlDir, parts[4])
+	finalDir := parts[4]
+	parentDir := finalDir[0:8]
+	checkDir := filepath.Join(s.dlDir, parentDir, finalDir)
 	dir, err := os.Stat(checkDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
