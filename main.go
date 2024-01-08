@@ -52,8 +52,9 @@ var (
 	startFlag        = flag.String("start", "", "skip all photos until this location is reached. for debugging.")
 	runFlag          = flag.String("run", "", "the program to run on each downloaded item, right after it is dowloaded. It is also the responsibility of that program to remove the downloaded item, if desired.")
 	verboseFlag      = flag.Bool("v", false, "be verbose")
+	veryVerboseFlag  = flag.Bool("vv", false, "be very verbose")
 	headlessFlag     = flag.Bool("headless", false, "Start chrome browser in headless mode (cannot do authentication this way).")
-	sessDirFlag  	 = flag.String("session-dir", filepath.Join(os.TempDir(), "gphotos-cdp"), "where to load the profile from in dev mode")
+	sessDirFlag      = flag.String("session-dir", filepath.Join(os.TempDir(), "gphotos-cdp"), "where to load the profile from in dev mode")
 	skipExistingFlag = flag.Bool("skipexisting", false, "don't overwrite photos that have been downloaded previously")
 )
 
@@ -61,6 +62,9 @@ var tick = 500 * time.Millisecond
 
 func main() {
 	flag.Parse()
+	if *veryVerboseFlag {
+		*verboseFlag = true
+	}
 	if *nItemsFlag == 0 {
 		return
 	}
@@ -351,8 +355,8 @@ func (s *Session) setFirstItem(ctx context.Context) error {
 func navToEnd(ctx context.Context) error {
 	// try jumping to the end of the page. detect we are there and have stopped
 	// moving when two consecutive screenshots are identical.
-	// a minimum floor of duplicate screenshots is used to overcome any 
-	// any false positives in determining the end of some larger libraries 
+	// a minimum floor of duplicate screenshots is used to overcome any
+	// any false positives in determining the end of some larger libraries
 	var previousScr, scr []byte
 	minAmountOfDuplicateScr := 3
 	amountOfDuplicateScr := 0
@@ -376,7 +380,7 @@ func navToEnd(ctx context.Context) error {
 			amountOfDuplicateScr = 0
 		}
 		previousScr = scr
-		time.Sleep(10*tick)
+		time.Sleep(10 * tick)
 	}
 
 	if *verboseFlag {
@@ -462,8 +466,8 @@ func navLeft(ctx context.Context) error {
 // markDone saves location in the dldir/.lastdone file, to indicate it is the
 // most recent item downloaded
 func markDone(dldir, location string) error {
-	if *verboseFlag {
-		log.Printf("Marking %v as done", location)
+	if *verboseFlag && !*skipExistingFlag {
+		log.Printf("%v : done", location)
 	}
 	oldPath := filepath.Join(dldir, ".lastdone")
 	newPath := oldPath + ".bak"
@@ -507,7 +511,7 @@ func startDownload(ctx context.Context) error {
 	up.Type = input.KeyUp
 
 	for _, ev := range []*input.DispatchKeyEventParams{&down, &up} {
-		if *verboseFlag {
+		if *veryVerboseFlag {
 			log.Printf("Event: %+v", *ev)
 		}
 		if err := ev.Do(ctx); err != nil {
@@ -522,8 +526,15 @@ func startDownload(ctx context.Context) error {
 // with an error if the download stops making any progress for more than a minute.
 func (s *Session) download(ctx context.Context, location string) (string, error) {
 
+	if *verboseFlag {
+		log.Printf("%s : start", location)
+	}
+
 	if err := startDownload(ctx); err != nil {
 		return "", err
+	}
+	if *veryVerboseFlag {
+		log.Printf("startDownload ok")
 	}
 
 	var filename string
@@ -540,6 +551,11 @@ func (s *Session) download(ctx context.Context, location string) (string, error)
 		}
 
 		entries, err := ioutil.ReadDir(s.dlDir)
+
+		if *veryVerboseFlag {
+			log.Printf("Readir ok")
+		}
+
 		if err != nil {
 			return "", err
 		}
@@ -717,7 +733,7 @@ func (s *Session) navN(N int) func(context.Context) error {
 				if skipDownload {
 					// TODO: Determine if we should briefly sleep here if we're navigating too quickly
 					if *verboseFlag {
-						log.Printf("Already downloaded %v", location)
+						log.Printf("%v : already downloaded", location)
 					}
 				}
 			}
