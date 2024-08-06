@@ -43,6 +43,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
+	"github.com/rwcarlsen/goexif/exif"
 )
 
 var (
@@ -56,6 +57,7 @@ var (
 	headlessFlag     = flag.Bool("headless", false, "Start chrome browser in headless mode (cannot do authentication this way).")
 	sessDirFlag      = flag.String("session-dir", filepath.Join(os.TempDir(), "gphotos-cdp"), "where to load the profile from in dev mode")
 	skipExistingFlag = flag.Bool("skipexisting", false, "don't overwrite photos that have been downloaded previously")
+	saveByDateFlag   = flag.Bool("savebydate", false, "save photos in directories by date")
 )
 
 var tick = 500 * time.Millisecond
@@ -627,6 +629,27 @@ func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (st
 	if err := os.MkdirAll(newDir, 0700); err != nil {
 		return "", err
 	}
+
+	if *saveByDateFlag {
+		f, err := os.Open(dlFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		x, err := exif.Decode(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		date, _ := x.Get(exif.DateTime)
+		dateStr := date.String()
+		dateParts := strings.Split(dateStr, " ")
+		dateDir := dateParts[0]
+		newDir = filepath.Join(newDir, dateDir)
+		if err := os.MkdirAll(newDir, 0700); err != nil {
+			return "", err
+		}
+	}
+
 	newFile := filepath.Join(newDir, dlFile)
 	if err := os.Rename(filepath.Join(s.dlDir, dlFile), newFile); err != nil {
 		return "", err
