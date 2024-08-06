@@ -610,28 +610,12 @@ func (s *Session) download(ctx context.Context, location string) (string, error)
 // location. It then moves dlFile in that directory. It returns the new path
 // of the moved file.
 func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (string, error) {
-	parts := strings.Split(location, "/")
-	if len(parts) < 5 {
-		return "", fmt.Errorf("not enough slash separated parts in location %v: %d", location, len(parts))
-	}
-	finalDir := parts[4]
 	if *veryVerboseFlag {
-		log.Printf("finalDir %v", finalDir)
+		log.Printf("downloaded file %v", filepath.Join(s.dlDir, dlFile))
 	}
-	parentDir := finalDir[0:8]
-	if *veryVerboseFlag {
-		log.Printf("parentDir %v", parentDir)
-	}
-	newDir := filepath.Join(s.dlDir, parentDir, finalDir)
-	if *veryVerboseFlag {
-		log.Printf("newDir %v", newDir)
-	}
-	if err := os.MkdirAll(newDir, 0700); err != nil {
-		return "", err
-	}
-
+	newDir := s.dlDir
 	if *saveByDateFlag {
-		f, err := os.Open(dlFile)
+		f, err := os.Open(filepath.Join(s.dlDir, dlFile))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -642,16 +626,42 @@ func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (st
 		defer f.Close()
 		date, _ := x.Get(exif.DateTime)
 		dateStr := date.String()
-		dateParts := strings.Split(dateStr, " ")
-		dateDir := dateParts[0]
-		newDir = filepath.Join(newDir, dateDir)
-		if err := os.MkdirAll(newDir, 0700); err != nil {
-			return "", err
+		if *veryVerboseFlag {
+			log.Printf("extracted date %v", dateStr)
 		}
+		parsedDate, err := time.Parse("\"2006:01:02 15:04:05\"", dateStr)
+		if err != nil {
+			log.Printf("Ошибка при парсинге даты:", err)
+		}
+		newDir = filepath.Join(s.dlDir, parsedDate.Format("2006-01-02"))
+	} else {
+		parts := strings.Split(location, "/")
+		if len(parts) < 5 {
+			return "", fmt.Errorf("not enough slash separated parts in location %v: %d", location, len(parts))
+		}
+		finalDir := parts[4]
+		if *veryVerboseFlag {
+			log.Printf("finalDir %v", finalDir)
+		}
+		parentDir := finalDir[0:8]
+		if *veryVerboseFlag {
+			log.Printf("parentDir %v", parentDir)
+		}
+		newDir = filepath.Join(s.dlDir, parentDir, finalDir)
+	}
+
+	if *veryVerboseFlag {
+		log.Printf("newDir %v", newDir)
+	}
+
+	if err := os.MkdirAll(newDir, 0700); err != nil {
+		log.Fatal(err)
+		return "", err
 	}
 
 	newFile := filepath.Join(newDir, dlFile)
 	if err := os.Rename(filepath.Join(s.dlDir, dlFile), newFile); err != nil {
+		log.Fatal(err)
 		return "", err
 	}
 	return newFile, nil
