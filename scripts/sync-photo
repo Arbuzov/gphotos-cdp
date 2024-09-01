@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+gphotos-cdp -vv -dev -savebydate -headless -dldir /download

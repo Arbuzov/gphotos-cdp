@@ -242,11 +242,11 @@ func (s *Session) login(ctx context.Context) error {
 				if location == "https://photos.google.com/" {
 					return nil
 				}
-				if *headlessFlag {
-					return errors.New("authentication not possible in -headless mode")
-				}
 				if *verboseFlag {
 					log.Printf("Not yet authenticated, at: %v", location)
+				}
+				if *headlessFlag {
+					return errors.New("authentication not possible in -headless mode")
 				}
 				time.Sleep(tick)
 			}
@@ -619,21 +619,42 @@ func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (st
 		if err != nil {
 			log.Fatal(err)
 		}
+		if *verboseFlag {
+			log.Printf("downloaded file %v", filepath.Join(s.dlDir, dlFile))
+		}
 		x, err := exif.Decode(f)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Не удалось извлечь EXIF данные: %v", err)
+			newDir := filepath.Join(s.dlDir, "unclassified")
+
+			if err := os.MkdirAll(newDir, os.ModePerm); err != nil {
+				log.Fatal(err)
+				return "", err
+			}
+
+			if err := os.Rename(filepath.Join(s.dlDir, dlFile), filepath.Join(newDir, dlFile)); err != nil {
+				log.Fatal(err)
+				return "", err
+			}
+
+			return filepath.Join(newDir, dlFile), nil
 		}
 		defer f.Close()
-		date, _ := x.Get(exif.DateTime)
-		dateStr := date.String()
-		if *veryVerboseFlag {
-			log.Printf("extracted date %v", dateStr)
-		}
-		parsedDate, err := time.Parse("\"2006:01:02 15:04:05\"", dateStr)
+		date, err := x.Get(exif.DateTime)
 		if err != nil {
-			log.Printf("Ошибка при парсинге даты:", err)
+			log.Printf("Не удалось получить дату: %v", err)
+			newDir = filepath.Join(s.dlDir, "unclassified")
+		} else {
+			dateStr := date.String()
+			if *veryVerboseFlag {
+				log.Printf("extracted date %v", dateStr)
+			}
+			parsedDate, err := time.Parse("\"2006:01:02 15:04:05\"", dateStr)
+			if err != nil {
+				log.Printf("Ошибка при парсинге даты:", err)
+			}
+			newDir = filepath.Join(s.dlDir, parsedDate.Format("2006-01-02"))
 		}
-		newDir = filepath.Join(s.dlDir, parsedDate.Format("2006-01-02"))
 	} else {
 		parts := strings.Split(location, "/")
 		if len(parts) < 5 {
@@ -659,12 +680,16 @@ func (s *Session) moveDownload(ctx context.Context, dlFile, location string) (st
 		return "", err
 	}
 
-	newFile := filepath.Join(newDir, dlFile)
-	if err := os.Rename(filepath.Join(s.dlDir, dlFile), newFile); err != nil {
+	if err := os.Rename(filepath.Join(s.dlDir, dlFile), filepath.Join(newDir, dlFile)); err != nil {
 		log.Fatal(err)
 		return "", err
 	}
-	return newFile, nil
+	return filepath.Join(newDir, dlFile), nil
+}
+
+// generate a path to save the file based on exif fallback with the file name or unassigned
+func (s *Session) getSavePath(ctx context.Context, dlFile, location string) (string, error) {
+	return "", nil
 }
 
 // checkPreviouslyDownloaded determines if a directory for the given location
